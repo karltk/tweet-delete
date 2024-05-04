@@ -23,7 +23,7 @@ const deleteTweet = (tweetId, oauth) => {
       {},
       (e, data) => {
         if (e) {
-          reject();
+          reject(e);
         } else {
           resolve();
         }
@@ -41,7 +41,7 @@ const unretweet = (tweetId, oauth) => {
       {},
       (e, data) => {
         if (e) {
-          reject();
+          reject(e);
         } else {
           resolve();
         }
@@ -66,51 +66,81 @@ class TweetCommand extends Command {
     let deleteCount = 0;
     let retweetCount = 0;
 
-    let originalFile = fs.readFileSync('tweet.js', 'utf8');
-    originalFile = originalFile.replace('window.YTD.tweet.part0 = ', '');
+    let originalFile = fs.readFileSync('tweets.js', 'utf8');
+    originalFile = originalFile.replace('window.YTD.tweets.part0 = ', '');
     const tweets = JSON.parse(originalFile);
+
+    let prompts = [
+      {
+        type: 'input',
+        name: 'inputDate',
+        message: chalk.blue('Delete tweets starting from what date?'),
+        default: moment().format('MM-DD-YYYY'),
+        validate: dateValidator,
+      },
+    ];
+
+    if (!!process.env.API_KEY) {
+      config.consumer_key = process.env.API_KEY;
+    } else {
+      prompts.push({
+        type: 'input',
+        name: 'consumerKey',
+        message: chalk.magenta('Enter your "API Key" value:'),
+        validate: inputValidator,
+      });
+    }
+
+    if (!!process.env.API_KEY_SECRET) {
+      config.consumer_secret = process.env.API_KEY_SECRET;
+    } else {
+      prompts.push({
+        type: 'input',
+        name: 'consumerSecret',
+        message: chalk.blue('Enter your "API Secret Key" value:'),
+        validate: inputValidator,
+      });
+    }
+
+    if (!!process.env.ACCESS_TOKEN) {
+      config.access_token_key = process.env.ACCESS_TOKEN;
+    } else {
+      prompts.push({
+        type: 'input',
+        name: 'accessTokenKey',
+        message: chalk.magenta('Enter your "Access Token" value:'),
+        validate: inputValidator,
+      });
+    }
+
+    if (!!process.env.ACCESS_TOKEN_SECRET) {
+      config.access_token_secret = process.env.ACCESS_TOKEN_SECRET;
+    } else {
+      prompts.push({
+        type: 'input',
+        name: 'accessTokenSecret',
+        message: chalk.blue('Enter your "Access Token Secret" value:'),
+        validate: inputValidator,
+      });
+    }
 
     try {
       // Provide user with a set of prompts.
-      const responses = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'inputDate',
-          message: chalk.blue('Delete tweets starting from what date?'),
-          default: moment().format('MM-DD-YYYY'),
-          validate: dateValidator,
-        },
-        {
-          type: 'input',
-          name: 'consumerKey',
-          message: chalk.magenta('Enter your "API Key" value:'),
-          validate: inputValidator,
-        },
-        {
-          type: 'input',
-          name: 'consumerSecret',
-          message: chalk.blue('Enter your "API Secret Key" value:'),
-          validate: inputValidator,
-        },
-        {
-          type: 'input',
-          name: 'accessTokenKey',
-          message: chalk.magenta('Enter your "Access Token" value:'),
-          validate: inputValidator,
-        },
-        {
-          type: 'input',
-          name: 'accessTokenSecret',
-          message: chalk.blue('Enter your "Access Token Secret" value:'),
-          validate: inputValidator,
-        },
-      ]);
+      const responses = await inquirer.prompt(prompts);
 
       // Set config properties.
-      config.consumer_key = responses.consumerKey;
-      config.consumer_secret = responses.consumerSecret;
-      config.access_token_key = responses.accessTokenKey;
-      config.access_token_secret = responses.accessTokenSecret;
+      if (!config.consumer_key) {
+        config.consumer_key = responses.consumerKey;
+      }
+      if (!config.consumer_secret) {
+        config.consumer_secret = responses.consumerSecret;
+      }
+      if (!config.access_token_key) {
+        config.access_token_key = responses.accessTokenKey;
+      }
+      if (!config.access_token_secret) {
+        config.access_token_secret = responses.accessTokenSecret;
+      }
 
       // Authenticate.
       const oauth = new OAuth.OAuth(
@@ -137,9 +167,9 @@ class TweetCommand extends Command {
               this.log(`${chalk.green('success')} ${chalk.gray(`Successfully unretweeted tweet ${tweet.id}`)}`);
               retweetCount += 1;
             })
-            .catch(() =>
+            .catch((e1) =>
               this.log(
-                `${chalk.red('error')} ${chalk.gray(`There was an issue trying to unretweet tweet ${tweet.id}`)}`
+                `${chalk.red('error')} ${chalk.gray(`There was an issue trying to unretweet tweet ${tweet.id}, ${JSON.stringify(e1)}`)}`
               )
             );
         }
@@ -149,8 +179,8 @@ class TweetCommand extends Command {
             this.log(`${chalk.green('success')} ${chalk.gray(`Successfully deleted tweet ${tweet.id}`)}`);
             deleteCount += 1;
           })
-          .catch(() =>
-            this.log(`${chalk.red('error')} ${chalk.gray(`There was an issue trying to delete tweet ${tweet.id}`)}`)
+          .catch((e2) =>
+            this.log(`${chalk.red('error')} ${chalk.gray(`There was an issue trying to delete tweet ${tweet.id}, ${JSON.stringify(e2)}`)}`)
           );
       });
 
@@ -159,7 +189,7 @@ class TweetCommand extends Command {
       this.error(
         `It is possible Twitter has updated the JSON structure of tweet.js. Please create an issue at ${chalk.underline.bold(
           'https://github.com/colbymillerdev/tweet-delete/issues'
-        )} so tweet-delete can be updated 🙂`
+        )} so tweet-delete can be updated 🙂 ${e}`
       );
     }
 
